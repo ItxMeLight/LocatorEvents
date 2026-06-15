@@ -5,10 +5,16 @@ import com.locatorevent.manager.ConfigManager;
 import com.locatorevent.manager.EventManager;
 import com.locatorevent.placeholder.LocatorPlaceholderExpansion;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -85,11 +91,38 @@ public class LocatorEvent extends JavaPlugin implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         bossBarManager.addPlayer(event.getPlayer());
+        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
+            eventManager.updatePlayerInventoryMaps(event.getPlayer(), true);
+        }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         bossBarManager.removePlayer(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onPickup(EntityPickupItemEvent event) {
+        if (eventManager.getState() == EventManager.EventState.ACTIVE && event.getEntity() instanceof org.bukkit.entity.Player player) {
+            ItemStack item = event.getItem().getItemStack();
+            if (item.getType() == Material.FILLED_MAP) {
+                eventManager.updateMapItem(item, true);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
+            ItemStack item = event.getCurrentItem();
+            if (item != null && item.getType() == Material.FILLED_MAP) {
+                eventManager.updateMapItem(item, true);
+            }
+            ItemStack cursor = event.getCursor();
+            if (cursor != null && cursor.getType() == Material.FILLED_MAP) {
+                eventManager.updateMapItem(cursor, true);
+            }
+        }
     }
 
     public ConfigManager getConfigManager() { return configManager; }

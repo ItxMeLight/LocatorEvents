@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
@@ -149,6 +150,15 @@ public class EventManager {
         }
     }
 
+    public void applyLocatorVisibility(boolean visible) {
+        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            updatePlayerInventoryMaps(player, visible);
+        }
+    }
+
+    public void updatePlayerInventoryMaps(Player player, boolean visible) {
     private void applyLocatorVisibility(boolean visible) {
         if (!plugin.getConfigManager().isLocatorEnabled()) return;
 
@@ -156,6 +166,26 @@ public class EventManager {
         String mode = config.getWorldMode();
         java.util.List<String> worldList = config.getWorldList();
 
+        World world = player.getWorld();
+        boolean inList = worldList.contains(world.getName());
+        boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
+                             (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+
+        if (!shouldApply) return;
+
+        for (ItemStack item : player.getInventory().getContents()) {
+            updateMapItem(item, visible);
+        }
+    }
+
+    public void updateMapItem(ItemStack item, boolean visible) {
+        if (item != null && item.getType() == Material.FILLED_MAP) {
+            if (item.getItemMeta() instanceof MapMeta mapMeta) {
+                if (mapMeta.hasMapView()) {
+                    MapView view = mapMeta.getMapView();
+                    if (view != null) {
+                        view.setTrackingPosition(visible);
+                        item.setItemMeta(mapMeta);
         for (Player player : Bukkit.getOnlinePlayers()) {
             World world = player.getWorld();
             boolean inList = worldList.contains(world.getName());
