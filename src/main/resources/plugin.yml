@@ -1,0 +1,11 @@
+name: LocatorEvent
+version: 1.0.0
+main: com.locatorevent.LocatorEvent
+api-version: '1.21'
+softdepend: [PlaceholderAPI]
+load: POSTWORLD
+
+commands:
+  locatorevent:
+    description: Main command for LocatorEvent
+    permission: locatorevent.admin
