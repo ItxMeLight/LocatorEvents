@@ -115,6 +115,7 @@ public class EventManager {
 
                 if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                     plugin.getBossBarManager().update();
+                    applyLocatorVisibility(true);
                 }
 
                 if (config.isParticlesEnabled()) {
@@ -158,6 +159,9 @@ public class EventManager {
     }
 
     public void updatePlayerInventoryMaps(Player player, boolean visible) {
+    private void applyLocatorVisibility(boolean visible) {
+        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+
         ConfigManager config = plugin.getConfigManager();
         String mode = config.getWorldMode();
         java.util.List<String> worldList = config.getWorldList();
@@ -182,6 +186,24 @@ public class EventManager {
                     if (view != null) {
                         view.setTrackingPosition(visible);
                         item.setItemMeta(mapMeta);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            World world = player.getWorld();
+            boolean inList = worldList.contains(world.getName());
+            boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
+                                 (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+
+            if (shouldApply) {
+                for (ItemStack item : player.getInventory().getContents()) {
+                    if (item != null && item.getType().name().contains("FILLED_MAP")) {
+                        if (item.getItemMeta() instanceof MapMeta mapMeta) {
+                            if (mapMeta.hasMapView()) {
+                                MapView view = mapMeta.getMapView();
+                                if (view != null) {
+                                    view.setTrackingPosition(visible);
+                                    item.setItemMeta(mapMeta);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -214,6 +236,8 @@ public class EventManager {
         String msg = config.getEventStartMessage();
 
         boolean titlesEnabled = config.isTitlesEnabled();
+        Component startTitle = parseText(config.getStartTitle(), null); // Parsed later for each player if needed, but Title can be shared if no player placeholders.
+        Component startSubtitle = parseText(config.getStartSubtitle(), null);
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
