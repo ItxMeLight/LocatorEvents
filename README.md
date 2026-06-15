@@ -1,5 +1,3 @@
-## LocatorEvent
-
 LocatorEvent is a highly customizable Minecraft plugin for **PaperMC 1.21.4+** (Java 21) that creates timed server-wide events where player visibility on maps is enabled. It features a dynamic BossBar, PlaceholderAPI support, and a robust scheduling system.
 
 ## 🎯 Features
