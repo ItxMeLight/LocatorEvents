@@ -1,0 +1,52 @@
+# LocatorEvent Configuration
+
+event:
+  timing:
+    minCooldownHours: 1
+    maxCooldownHours: 3
+    minEventDurationMinutes: 10
+    maxEventDurationMinutes: 15
+  worlds:
+    mode: WHITELIST # WHITELIST or BLACKLIST
+    list:
+      - world
+      - world_nether
+      - world_the_end
+  enableLocator: true
+
+bossbar:
+  enabled: true
+  text: "&b&lLocator Event Active! &7Time Left: &e%locatorevent_time_left%"
+  color: BLUE # BLUE, GREEN, PINK, PURPLE, RED, WHITE, YELLOW
+  style: PROGRESS # PROGRESS, NOTCHED_6, NOTCHED_10, NOTCHED_12, NOTCHED_20
+  updateIntervalTicks: 20
+
+messages:
+  eventStart: "&a&lThe Locator Event has started! Everyone is now visible on maps."
+  eventEnd: "&c&lThe Locator Event has ended. Player visibility on maps is now disabled."
+  preAnnouncement: "&6&lNotice: &eA Locator Event will start in %time%!"
+  preAnnouncementLeadMinutes: 5
+
+effects:
+  particles:
+    enabled: true
+    type: HAPPY_VILLAGER
+    amount: 5
+  titles:
+    enabled: true
+    start:
+      title: "&b&lLocator Event"
+      subtitle: "&7Everyone is now visible on maps!"
+    end:
+      title: "&c&lEvent Ended"
+      subtitle: "&7Player visibility disabled."
+  sounds:
+    enabled: true
+    start:
+      type: ENTITY_EXPERIENCE_ORB_PICKUP
+      volume: 1.0
+      pitch: 1.0
+    end:
+      type: ENTITY_WITHER_SPAWN
+      volume: 0.5
+      pitch: 1.0
