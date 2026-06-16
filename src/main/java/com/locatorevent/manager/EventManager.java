@@ -6,6 +6,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRule;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -48,6 +49,7 @@ public class EventManager {
 
     private void scheduleNextEvent() {
         cancelCurrentTask();
+        ConfigManager config = plugin.getConfigManager();
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
@@ -73,6 +75,7 @@ public class EventManager {
         if (state == EventState.ACTIVE) return;
         cancelCurrentTask();
 
+        ConfigManager config = plugin.getConfigManager();
         int minMinutes = config.getMinEventDurationMinutes();
         int maxMinutes = config.getMaxEventDurationMinutes();
 
@@ -104,10 +107,12 @@ public class EventManager {
                 ticksElapsed = 0;
             }
 
+            ConfigManager config = plugin.getConfigManager();
             if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                 plugin.getBossBarManager().update();
             }
 
+            if (config.isParticlesEnabled()) {
             if (config.isParticlesEnabled() && ticksElapsed == 0) {
                 spawnParticles();
             }
@@ -139,6 +144,30 @@ public class EventManager {
         }
     }
 
+    public void applyLocatorVisibility(boolean visible) {
+        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+
+        ConfigManager config = plugin.getConfigManager();
+        String mode = config.getWorldMode();
+        List<String> worldList = config.getWorldList();
+
+        for (World world : Bukkit.getWorlds()) {
+            boolean inList = worldList.contains(world.getName());
+            boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
+                                 (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+
+            if (shouldApply) {
+                try {
+                    // Modern Locator Bar HUD control via GameRule
+                    // We use getByName for safety across 1.21.4+ versions.
+                    GameRule<?> genericRule = GameRule.getByName("locatorBar");
+                    if (genericRule != null && genericRule.getType() == Boolean.class) {
+                        @SuppressWarnings("unchecked")
+                        GameRule<Boolean> locatorBarRule = (GameRule<Boolean>) genericRule;
+                        world.setGameRule(locatorBarRule, visible);
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Failed to set locatorBar game rule in world " + world.getName() + ": " + e.getMessage());
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
         List<String> worldList = config.getWorldList();
@@ -183,6 +212,11 @@ public class EventManager {
     }
 
     private void broadcastAnnouncement(String time) {
+        String msg = plugin.getConfigManager().getPreAnnouncementMessage();
+        if (msg != null && !msg.isEmpty()) {
+            final String finalMsg = msg.replace("%time%", time);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(parseText(finalMsg, player));
         String msg = config.getPreAnnouncementMessage();
         if (msg != null && !msg.isEmpty()) {
             msg = msg.replace("%time%", time);
@@ -193,6 +227,7 @@ public class EventManager {
     }
 
     private void spawnParticles() {
+        ConfigManager config = plugin.getConfigManager();
         try {
             Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
             int amount = config.getParticleAmount();
@@ -203,6 +238,7 @@ public class EventManager {
     }
 
     private void broadcastStart() {
+        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventStartMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String startTitle = config.getStartTitle();
@@ -229,6 +265,7 @@ public class EventManager {
     }
 
     private void broadcastEnd() {
+        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventEndMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String endTitle = config.getEndTitle();
