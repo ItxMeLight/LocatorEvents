@@ -112,7 +112,6 @@ public class EventManager {
                 plugin.getBossBarManager().update();
             }
 
-            if (config.isParticlesEnabled()) {
             if (config.isParticlesEnabled() && ticksElapsed == 0) {
                 spawnParticles();
             }
@@ -145,16 +144,16 @@ public class EventManager {
     }
 
     public void applyLocatorVisibility(boolean visible) {
-        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+        if (!config.isLocatorEnabled()) return;
 
-        ConfigManager config = plugin.getConfigManager();
         String mode = config.getWorldMode();
         List<String> worldList = config.getWorldList();
 
+        // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
             boolean inList = worldList.contains(world.getName());
             boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
-                                 (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+                                  (mode.equalsIgnoreCase("BLACKLIST") && !inList);
 
             if (shouldApply) {
                 try {
@@ -168,6 +167,16 @@ public class EventManager {
                     }
                 } catch (Exception e) {
                     plugin.getLogger().warning("Failed to set locatorBar game rule in world " + world.getName() + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // 2. Actualizează hărțile din inventarele jucătorilor
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            updatePlayerInventoryMaps(player, visible);
+        }
+    }
+
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
         List<String> worldList = config.getWorldList();
@@ -179,14 +188,6 @@ public class EventManager {
             return !inList;
         }
         return true;
-    }
-
-    public void applyLocatorVisibility(boolean visible) {
-        if (!config.isLocatorEnabled()) return;
-
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            updatePlayerInventoryMaps(player, visible);
-        }
     }
 
     public void updatePlayerInventoryMaps(Player player, boolean visible) {
@@ -212,22 +213,16 @@ public class EventManager {
     }
 
     private void broadcastAnnouncement(String time) {
-        String msg = plugin.getConfigManager().getPreAnnouncementMessage();
-        if (msg != null && !msg.isEmpty()) {
-            final String finalMsg = msg.replace("%time%", time);
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(parseText(finalMsg, player));
         String msg = config.getPreAnnouncementMessage();
         if (msg != null && !msg.isEmpty()) {
-            msg = msg.replace("%time%", time);
+            String finalMsg = msg.replace("%time%", time);
             for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(parseText(msg, player));
+                player.sendMessage(parseText(finalMsg, player));
             }
         }
     }
 
     private void spawnParticles() {
-        ConfigManager config = plugin.getConfigManager();
         try {
             Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
             int amount = config.getParticleAmount();
@@ -238,7 +233,6 @@ public class EventManager {
     }
 
     private void broadcastStart() {
-        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventStartMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String startTitle = config.getStartTitle();
@@ -265,7 +259,6 @@ public class EventManager {
     }
 
     private void broadcastEnd() {
-        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventEndMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String endTitle = config.getEndTitle();
