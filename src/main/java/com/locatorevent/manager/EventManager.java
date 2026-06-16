@@ -19,6 +19,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
 
 public class EventManager {
 
@@ -49,6 +50,7 @@ public class EventManager {
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
+        long delayHours = minHours + (maxHours > minHours ? (long) random.nextInt(maxHours - minHours + 1) : 0);
         long delayHours = minHours + (maxHours > minHours ? random.nextInt(maxHours - minHours + 1) : 0);
         long delayTicks = delayHours * 60 * 60 * 20;
 
@@ -56,6 +58,12 @@ public class EventManager {
         long announceLeadTicks = (long) announceLeadMinutes * 60 * 20;
 
         if (delayTicks > announceLeadTicks) {
+            currentTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                broadcastAnnouncement(announceLeadMinutes + " minutes");
+                currentTask = Bukkit.getScheduler().runTaskLater(plugin, this::startEvent, announceLeadTicks);
+            }, delayTicks - announceLeadTicks);
+        } else {
+            currentTask = Bukkit.getScheduler().runTaskLater(plugin, this::startEvent, Math.max(1L, delayTicks));
             currentTask = new BukkitRunnable() {
                 @Override
                 public void run() {
@@ -98,6 +106,33 @@ public class EventManager {
         plugin.getBossBarManager().show();
         broadcastStart();
 
+        currentTask = new EventUpdateTask().runTaskTimer(plugin, 1L, 1L);
+    }
+
+    private class EventUpdateTask extends BukkitRunnable {
+        private int ticksElapsed = 0;
+        @Override
+        public void run() {
+            if (timeLeftSeconds <= 0) {
+                endEvent();
+                return;
+            }
+
+            ticksElapsed++;
+            if (ticksElapsed >= 20) {
+                timeLeftSeconds--;
+                ticksElapsed = 0;
+            }
+
+            ConfigManager config = plugin.getConfigManager();
+            if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
+                plugin.getBossBarManager().update();
+            }
+
+            if (config.isParticlesEnabled()) {
+                spawnParticles();
+            }
+        }
         currentTask = new BukkitRunnable() {
             int ticksElapsed = 0;
             @Override
@@ -159,6 +194,9 @@ public class EventManager {
     }
 
     public void updatePlayerInventoryMaps(Player player, boolean visible) {
+        ConfigManager config = plugin.getConfigManager();
+        String mode = config.getWorldMode();
+        List<String> worldList = config.getWorldList();
     private void applyLocatorVisibility(boolean visible) {
         if (!plugin.getConfigManager().isLocatorEnabled()) return;
 
@@ -180,6 +218,8 @@ public class EventManager {
 
     public void updateMapItem(ItemStack item, boolean visible) {
         if (item != null && item.getType() == Material.FILLED_MAP) {
+            if (item.getItemMeta() instanceof MapMeta) {
+                MapMeta mapMeta = (MapMeta) item.getItemMeta();
             if (item.getItemMeta() instanceof MapMeta mapMeta) {
                 if (mapMeta.hasMapView()) {
                     MapView view = mapMeta.getMapView();
@@ -213,6 +253,9 @@ public class EventManager {
     private void broadcastAnnouncement(String time) {
         String msg = plugin.getConfigManager().getPreAnnouncementMessage();
         if (msg != null && !msg.isEmpty()) {
+            final String finalMsg = msg.replace("%time%", time);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(parseText(finalMsg, player));
             msg = msg.replace("%time%", time);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.sendMessage(parseText(msg, player));
@@ -234,6 +277,13 @@ public class EventManager {
     private void broadcastStart() {
         ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventStartMessage();
+        boolean titlesEnabled = config.isTitlesEnabled();
+        String startTitle = config.getStartTitle();
+        String startSubtitle = config.getStartSubtitle();
+        boolean soundsEnabled = config.isSoundsEnabled();
+        String soundType = config.getStartSoundType();
+        float volume = (float) config.getStartSoundVolume();
+        float pitch = (float) config.getStartSoundPitch();
 
         boolean titlesEnabled = config.isTitlesEnabled();
         Component startTitle = parseText(config.getStartTitle(), null); // Parsed later for each player if needed, but Title can be shared if no player placeholders.
@@ -244,6 +294,12 @@ public class EventManager {
                 player.sendMessage(parseText(msg, player));
             }
             if (titlesEnabled) {
+                player.showTitle(Title.title(parseText(startTitle, player), parseText(startSubtitle, player)));
+            }
+            if (soundsEnabled) {
+                try {
+                    Sound sound = Sound.valueOf(soundType.toUpperCase());
+                    player.playSound(player.getLocation(), sound, volume, pitch);
                 player.showTitle(Title.title(parseText(config.getStartTitle(), player), parseText(config.getStartSubtitle(), player)));
             }
             if (config.isSoundsEnabled()) {
@@ -259,12 +315,24 @@ public class EventManager {
         ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventEndMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
+        String endTitle = config.getEndTitle();
+        String endSubtitle = config.getEndSubtitle();
+        boolean soundsEnabled = config.isSoundsEnabled();
+        String soundType = config.getEndSoundType();
+        float volume = (float) config.getEndSoundVolume();
+        float pitch = (float) config.getEndSoundPitch();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
                 player.sendMessage(parseText(msg, player));
             }
             if (titlesEnabled) {
+                player.showTitle(Title.title(parseText(endTitle, player), parseText(endSubtitle, player)));
+            }
+            if (soundsEnabled) {
+                try {
+                    Sound sound = Sound.valueOf(soundType.toUpperCase());
+                    player.playSound(player.getLocation(), sound, volume, pitch);
                 player.showTitle(Title.title(parseText(config.getEndTitle(), player), parseText(config.getEndSubtitle(), player)));
             }
             if (config.isSoundsEnabled()) {
