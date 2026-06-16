@@ -12,11 +12,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
@@ -89,10 +88,19 @@ public class LocatorEvent extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
+            boolean enabled = eventManager.isWorldEnabled(event.getPlayer().getWorld());
+            eventManager.updatePlayerInventoryMaps(event.getPlayer(), enabled);
+        }
+    }
+
+    @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         bossBarManager.addPlayer(event.getPlayer());
         if (eventManager.getState() == EventManager.EventState.ACTIVE) {
-            eventManager.updatePlayerInventoryMaps(event.getPlayer(), true);
+            boolean enabled = eventManager.isWorldEnabled(event.getPlayer().getWorld());
+            eventManager.updatePlayerInventoryMaps(event.getPlayer(), enabled);
         }
     }
 
@@ -104,8 +112,8 @@ public class LocatorEvent extends JavaPlugin implements Listener {
     @EventHandler
     public void onPickup(EntityPickupItemEvent event) {
         if (eventManager.getState() == EventManager.EventState.ACTIVE && event.getEntity() instanceof org.bukkit.entity.Player player) {
-            ItemStack item = event.getItem().getItemStack();
-            if (item.getType() == Material.FILLED_MAP) {
+            if (eventManager.isWorldEnabled(player.getWorld())) {
+                ItemStack item = event.getItem().getItemStack();
                 eventManager.updateMapItem(item, true);
             }
         }
@@ -113,13 +121,11 @@ public class LocatorEvent extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
-            ItemStack item = event.getCurrentItem();
-            if (item != null && item.getType() == Material.FILLED_MAP) {
+        if (eventManager.getState() == EventManager.EventState.ACTIVE && event.getWhoClicked() instanceof org.bukkit.entity.Player player) {
+            if (eventManager.isWorldEnabled(player.getWorld())) {
+                ItemStack item = event.getCurrentItem();
                 eventManager.updateMapItem(item, true);
-            }
-            ItemStack cursor = event.getCursor();
-            if (cursor != null && cursor.getType() == Material.FILLED_MAP) {
+                ItemStack cursor = event.getCursor();
                 eventManager.updateMapItem(cursor, true);
             }
         }
