@@ -7,10 +7,14 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.map.MapView;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -21,6 +25,7 @@ import java.util.List;
 public class EventManager {
 
     private final LocatorEvent plugin;
+    private final ConfigManager config;
     private final Random random = new Random();
 
     private EventState state = EventState.INACTIVE;
@@ -35,6 +40,7 @@ public class EventManager {
 
     public EventManager(LocatorEvent plugin) {
         this.plugin = plugin;
+        this.config = plugin.getConfigManager();
     }
 
     public void startScheduler() {
@@ -87,6 +93,7 @@ public class EventManager {
 
     private class EventUpdateTask extends BukkitRunnable {
         private int ticksElapsed = 0;
+
         @Override
         public void run() {
             if (timeLeftSeconds <= 0) {
@@ -106,6 +113,7 @@ public class EventManager {
             }
 
             if (config.isParticlesEnabled()) {
+            if (config.isParticlesEnabled() && ticksElapsed == 0) {
                 spawnParticles();
             }
         }
@@ -160,6 +168,44 @@ public class EventManager {
                     }
                 } catch (Exception e) {
                     plugin.getLogger().warning("Failed to set locatorBar game rule in world " + world.getName() + ": " + e.getMessage());
+    public boolean isWorldEnabled(World world) {
+        String mode = config.getWorldMode();
+        List<String> worldList = config.getWorldList();
+        boolean inList = worldList.contains(world.getName());
+
+        if (mode.equalsIgnoreCase("WHITELIST")) {
+            return inList;
+        } else if (mode.equalsIgnoreCase("BLACKLIST")) {
+            return !inList;
+        }
+        return true;
+    }
+
+    public void applyLocatorVisibility(boolean visible) {
+        if (!config.isLocatorEnabled()) return;
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            updatePlayerInventoryMaps(player, visible);
+        }
+    }
+
+    public void updatePlayerInventoryMaps(Player player, boolean visible) {
+        if (!isWorldEnabled(player.getWorld())) return;
+
+        for (ItemStack item : player.getInventory().getContents()) {
+            updateMapItem(item, visible);
+        }
+    }
+
+    public void updateMapItem(ItemStack item, boolean visible) {
+        if (item != null && item.getType() == Material.FILLED_MAP) {
+            if (item.getItemMeta() instanceof MapMeta mapMeta) {
+                if (mapMeta.hasMapView()) {
+                    MapView view = mapMeta.getMapView();
+                    if (view != null) {
+                        view.setTrackingPosition(visible);
+                        item.setItemMeta(mapMeta);
+                    }
                 }
             }
         }
@@ -171,6 +217,11 @@ public class EventManager {
             final String finalMsg = msg.replace("%time%", time);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.sendMessage(parseText(finalMsg, player));
+        String msg = config.getPreAnnouncementMessage();
+        if (msg != null && !msg.isEmpty()) {
+            msg = msg.replace("%time%", time);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(parseText(msg, player));
             }
         }
     }
