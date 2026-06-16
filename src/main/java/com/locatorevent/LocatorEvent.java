@@ -5,13 +5,10 @@ import com.locatorevent.manager.ConfigManager;
 import com.locatorevent.manager.EventManager;
 import com.locatorevent.placeholder.LocatorPlaceholderExpansion;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
@@ -90,9 +87,6 @@ public class LocatorEvent extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        bossBarManager.addPlayer(event.getPlayer());
-        // No longer need to manually update maps here as GameRule is per-world.
     public void onWorldChange(PlayerChangedWorldEvent event) {
         if (eventManager.getState() == EventManager.EventState.ACTIVE) {
             boolean enabled = eventManager.isWorldEnabled(event.getPlayer().getWorld());
