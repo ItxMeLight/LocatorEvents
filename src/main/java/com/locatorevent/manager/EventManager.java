@@ -51,6 +51,7 @@ public class EventManager {
         int maxHours = config.getMaxCooldownHours();
 
         long delayHours = minHours + (maxHours > minHours ? (long) random.nextInt(maxHours - minHours + 1) : 0);
+        long delayHours = minHours + (maxHours > minHours ? random.nextInt(maxHours - minHours + 1) : 0);
         long delayTicks = delayHours * 60 * 60 * 20;
 
         int announceLeadMinutes = config.getPreAnnouncementLeadMinutes();
@@ -63,6 +64,26 @@ public class EventManager {
             }, delayTicks - announceLeadTicks);
         } else {
             currentTask = Bukkit.getScheduler().runTaskLater(plugin, this::startEvent, Math.max(1L, delayTicks));
+            currentTask = new BukkitRunnable() {
+                @Override
+                public void run() {
+                    broadcastAnnouncement(announceLeadMinutes + " minutes");
+
+                    currentTask = new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            startEvent();
+                        }
+                    }.runTaskLater(plugin, announceLeadTicks);
+                }
+            }.runTaskLater(plugin, delayTicks - announceLeadTicks);
+        } else {
+            currentTask = new BukkitRunnable() {
+                @Override
+                public void run() {
+                    startEvent();
+                }
+            }.runTaskLater(plugin, delayTicks);
         }
 
         plugin.getLogger().info("Next Locator Event scheduled in " + delayHours + " hours.");
@@ -112,6 +133,31 @@ public class EventManager {
                 spawnParticles();
             }
         }
+        currentTask = new BukkitRunnable() {
+            int ticksElapsed = 0;
+            @Override
+            public void run() {
+                if (timeLeftSeconds <= 0) {
+                    endEvent();
+                    return;
+                }
+
+                ticksElapsed++;
+                if (ticksElapsed >= 20) {
+                    timeLeftSeconds--;
+                    ticksElapsed = 0;
+                }
+
+                if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
+                    plugin.getBossBarManager().update();
+                    applyLocatorVisibility(true);
+                }
+
+                if (config.isParticlesEnabled()) {
+                    spawnParticles();
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
     }
 
     public void endEvent() {
@@ -151,6 +197,12 @@ public class EventManager {
         ConfigManager config = plugin.getConfigManager();
         String mode = config.getWorldMode();
         List<String> worldList = config.getWorldList();
+    private void applyLocatorVisibility(boolean visible) {
+        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+
+        ConfigManager config = plugin.getConfigManager();
+        String mode = config.getWorldMode();
+        java.util.List<String> worldList = config.getWorldList();
 
         World world = player.getWorld();
         boolean inList = worldList.contains(world.getName());
@@ -168,11 +220,30 @@ public class EventManager {
         if (item != null && item.getType() == Material.FILLED_MAP) {
             if (item.getItemMeta() instanceof MapMeta) {
                 MapMeta mapMeta = (MapMeta) item.getItemMeta();
+            if (item.getItemMeta() instanceof MapMeta mapMeta) {
                 if (mapMeta.hasMapView()) {
                     MapView view = mapMeta.getMapView();
                     if (view != null) {
                         view.setTrackingPosition(visible);
                         item.setItemMeta(mapMeta);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            World world = player.getWorld();
+            boolean inList = worldList.contains(world.getName());
+            boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
+                                 (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+
+            if (shouldApply) {
+                for (ItemStack item : player.getInventory().getContents()) {
+                    if (item != null && item.getType().name().contains("FILLED_MAP")) {
+                        if (item.getItemMeta() instanceof MapMeta mapMeta) {
+                            if (mapMeta.hasMapView()) {
+                                MapView view = mapMeta.getMapView();
+                                if (view != null) {
+                                    view.setTrackingPosition(visible);
+                                    item.setItemMeta(mapMeta);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -185,6 +256,9 @@ public class EventManager {
             final String finalMsg = msg.replace("%time%", time);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.sendMessage(parseText(finalMsg, player));
+            msg = msg.replace("%time%", time);
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(parseText(msg, player));
             }
         }
     }
@@ -211,6 +285,10 @@ public class EventManager {
         float volume = (float) config.getStartSoundVolume();
         float pitch = (float) config.getStartSoundPitch();
 
+        boolean titlesEnabled = config.isTitlesEnabled();
+        Component startTitle = parseText(config.getStartTitle(), null); // Parsed later for each player if needed, but Title can be shared if no player placeholders.
+        Component startSubtitle = parseText(config.getStartSubtitle(), null);
+
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
                 player.sendMessage(parseText(msg, player));
@@ -222,6 +300,12 @@ public class EventManager {
                 try {
                     Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
+                player.showTitle(Title.title(parseText(config.getStartTitle(), player), parseText(config.getStartSubtitle(), player)));
+            }
+            if (config.isSoundsEnabled()) {
+                try {
+                    Sound sound = Sound.valueOf(config.getStartSoundType().toUpperCase());
+                    player.playSound(player.getLocation(), sound, (float)config.getStartSoundVolume(), (float)config.getStartSoundPitch());
                 } catch (Exception ignored) {}
             }
         }
@@ -249,6 +333,12 @@ public class EventManager {
                 try {
                     Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
+                player.showTitle(Title.title(parseText(config.getEndTitle(), player), parseText(config.getEndSubtitle(), player)));
+            }
+            if (config.isSoundsEnabled()) {
+                try {
+                    Sound sound = Sound.valueOf(config.getEndSoundType().toUpperCase());
+                    player.playSound(player.getLocation(), sound, (float)config.getEndSoundVolume(), (float)config.getEndSoundPitch());
                 } catch (Exception ignored) {}
             }
         }
