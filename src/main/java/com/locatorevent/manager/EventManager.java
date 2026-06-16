@@ -24,6 +24,7 @@ import java.util.List;
 public class EventManager {
 
     private final LocatorEvent plugin;
+    private final ConfigManager config;
     private final Random random = new Random();
 
     private EventState state = EventState.INACTIVE;
@@ -38,6 +39,7 @@ public class EventManager {
 
     public EventManager(LocatorEvent plugin) {
         this.plugin = plugin;
+        this.config = plugin.getConfigManager();
     }
 
     public void startScheduler() {
@@ -46,12 +48,10 @@ public class EventManager {
 
     private void scheduleNextEvent() {
         cancelCurrentTask();
-        ConfigManager config = plugin.getConfigManager();
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
         long delayHours = minHours + (maxHours > minHours ? (long) random.nextInt(maxHours - minHours + 1) : 0);
-        long delayHours = minHours + (maxHours > minHours ? random.nextInt(maxHours - minHours + 1) : 0);
         long delayTicks = delayHours * 60 * 60 * 20;
 
         int announceLeadMinutes = config.getPreAnnouncementLeadMinutes();
@@ -64,26 +64,6 @@ public class EventManager {
             }, delayTicks - announceLeadTicks);
         } else {
             currentTask = Bukkit.getScheduler().runTaskLater(plugin, this::startEvent, Math.max(1L, delayTicks));
-            currentTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    broadcastAnnouncement(announceLeadMinutes + " minutes");
-
-                    currentTask = new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            startEvent();
-                        }
-                    }.runTaskLater(plugin, announceLeadTicks);
-                }
-            }.runTaskLater(plugin, delayTicks - announceLeadTicks);
-        } else {
-            currentTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    startEvent();
-                }
-            }.runTaskLater(plugin, delayTicks);
         }
 
         plugin.getLogger().info("Next Locator Event scheduled in " + delayHours + " hours.");
@@ -93,7 +73,6 @@ public class EventManager {
         if (state == EventState.ACTIVE) return;
         cancelCurrentTask();
 
-        ConfigManager config = plugin.getConfigManager();
         int minMinutes = config.getMinEventDurationMinutes();
         int maxMinutes = config.getMaxEventDurationMinutes();
 
@@ -111,6 +90,7 @@ public class EventManager {
 
     private class EventUpdateTask extends BukkitRunnable {
         private int ticksElapsed = 0;
+
         @Override
         public void run() {
             if (timeLeftSeconds <= 0) {
@@ -124,40 +104,14 @@ public class EventManager {
                 ticksElapsed = 0;
             }
 
-            ConfigManager config = plugin.getConfigManager();
             if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                 plugin.getBossBarManager().update();
             }
 
-            if (config.isParticlesEnabled()) {
+            if (config.isParticlesEnabled() && ticksElapsed == 0) {
                 spawnParticles();
             }
         }
-        currentTask = new BukkitRunnable() {
-            int ticksElapsed = 0;
-            @Override
-            public void run() {
-                if (timeLeftSeconds <= 0) {
-                    endEvent();
-                    return;
-                }
-
-                ticksElapsed++;
-                if (ticksElapsed >= 20) {
-                    timeLeftSeconds--;
-                    ticksElapsed = 0;
-                }
-
-                if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
-                    plugin.getBossBarManager().update();
-                    applyLocatorVisibility(true);
-                }
-
-                if (config.isParticlesEnabled()) {
-                    spawnParticles();
-                }
-            }
-        }.runTaskTimer(plugin, 1L, 1L);
     }
 
     public void endEvent() {
@@ -185,8 +139,21 @@ public class EventManager {
         }
     }
 
+    public boolean isWorldEnabled(World world) {
+        String mode = config.getWorldMode();
+        List<String> worldList = config.getWorldList();
+        boolean inList = worldList.contains(world.getName());
+
+        if (mode.equalsIgnoreCase("WHITELIST")) {
+            return inList;
+        } else if (mode.equalsIgnoreCase("BLACKLIST")) {
+            return !inList;
+        }
+        return true;
+    }
+
     public void applyLocatorVisibility(boolean visible) {
-        if (!plugin.getConfigManager().isLocatorEnabled()) return;
+        if (!config.isLocatorEnabled()) return;
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             updatePlayerInventoryMaps(player, visible);
@@ -194,22 +161,7 @@ public class EventManager {
     }
 
     public void updatePlayerInventoryMaps(Player player, boolean visible) {
-        ConfigManager config = plugin.getConfigManager();
-        String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
-    private void applyLocatorVisibility(boolean visible) {
-        if (!plugin.getConfigManager().isLocatorEnabled()) return;
-
-        ConfigManager config = plugin.getConfigManager();
-        String mode = config.getWorldMode();
-        java.util.List<String> worldList = config.getWorldList();
-
-        World world = player.getWorld();
-        boolean inList = worldList.contains(world.getName());
-        boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
-                             (mode.equalsIgnoreCase("BLACKLIST") && !inList);
-
-        if (!shouldApply) return;
+        if (!isWorldEnabled(player.getWorld())) return;
 
         for (ItemStack item : player.getInventory().getContents()) {
             updateMapItem(item, visible);
@@ -218,32 +170,12 @@ public class EventManager {
 
     public void updateMapItem(ItemStack item, boolean visible) {
         if (item != null && item.getType() == Material.FILLED_MAP) {
-            if (item.getItemMeta() instanceof MapMeta) {
-                MapMeta mapMeta = (MapMeta) item.getItemMeta();
             if (item.getItemMeta() instanceof MapMeta mapMeta) {
                 if (mapMeta.hasMapView()) {
                     MapView view = mapMeta.getMapView();
                     if (view != null) {
                         view.setTrackingPosition(visible);
                         item.setItemMeta(mapMeta);
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            World world = player.getWorld();
-            boolean inList = worldList.contains(world.getName());
-            boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
-                                 (mode.equalsIgnoreCase("BLACKLIST") && !inList);
-
-            if (shouldApply) {
-                for (ItemStack item : player.getInventory().getContents()) {
-                    if (item != null && item.getType().name().contains("FILLED_MAP")) {
-                        if (item.getItemMeta() instanceof MapMeta mapMeta) {
-                            if (mapMeta.hasMapView()) {
-                                MapView view = mapMeta.getMapView();
-                                if (view != null) {
-                                    view.setTrackingPosition(visible);
-                                    item.setItemMeta(mapMeta);
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -251,11 +183,8 @@ public class EventManager {
     }
 
     private void broadcastAnnouncement(String time) {
-        String msg = plugin.getConfigManager().getPreAnnouncementMessage();
+        String msg = config.getPreAnnouncementMessage();
         if (msg != null && !msg.isEmpty()) {
-            final String finalMsg = msg.replace("%time%", time);
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(parseText(finalMsg, player));
             msg = msg.replace("%time%", time);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.sendMessage(parseText(msg, player));
@@ -264,7 +193,6 @@ public class EventManager {
     }
 
     private void spawnParticles() {
-        ConfigManager config = plugin.getConfigManager();
         try {
             Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
             int amount = config.getParticleAmount();
@@ -275,7 +203,6 @@ public class EventManager {
     }
 
     private void broadcastStart() {
-        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventStartMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String startTitle = config.getStartTitle();
@@ -284,10 +211,6 @@ public class EventManager {
         String soundType = config.getStartSoundType();
         float volume = (float) config.getStartSoundVolume();
         float pitch = (float) config.getStartSoundPitch();
-
-        boolean titlesEnabled = config.isTitlesEnabled();
-        Component startTitle = parseText(config.getStartTitle(), null); // Parsed later for each player if needed, but Title can be shared if no player placeholders.
-        Component startSubtitle = parseText(config.getStartSubtitle(), null);
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
@@ -300,19 +223,12 @@ public class EventManager {
                 try {
                     Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
-                player.showTitle(Title.title(parseText(config.getStartTitle(), player), parseText(config.getStartSubtitle(), player)));
-            }
-            if (config.isSoundsEnabled()) {
-                try {
-                    Sound sound = Sound.valueOf(config.getStartSoundType().toUpperCase());
-                    player.playSound(player.getLocation(), sound, (float)config.getStartSoundVolume(), (float)config.getStartSoundPitch());
                 } catch (Exception ignored) {}
             }
         }
     }
 
     private void broadcastEnd() {
-        ConfigManager config = plugin.getConfigManager();
         String msg = config.getEventEndMessage();
         boolean titlesEnabled = config.isTitlesEnabled();
         String endTitle = config.getEndTitle();
@@ -333,12 +249,6 @@ public class EventManager {
                 try {
                     Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
-                player.showTitle(Title.title(parseText(config.getEndTitle(), player), parseText(config.getEndSubtitle(), player)));
-            }
-            if (config.isSoundsEnabled()) {
-                try {
-                    Sound sound = Sound.valueOf(config.getEndSoundType().toUpperCase());
-                    player.playSound(player.getLocation(), sound, (float)config.getEndSoundVolume(), (float)config.getEndSoundPitch());
                 } catch (Exception ignored) {}
             }
         }
