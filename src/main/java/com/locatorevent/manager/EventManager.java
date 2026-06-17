@@ -7,21 +7,21 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
-import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.MapMeta;
-import org.bukkit.map.MapView;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
 
+/**
+ * Manages Locator Events and visual effects.
+ * Optimized for minimal CPU/Memory overhead during active cycles.
+ */
 public class EventManager {
 
     private final LocatorEvent plugin;
@@ -33,6 +33,9 @@ public class EventManager {
     private long totalDurationSeconds = 0;
 
     private BukkitTask currentTask;
+
+    // Cached objects to avoid repeated lookups
+    private Particle cachedParticle;
 
     public enum EventState {
         ACTIVE, INACTIVE
@@ -49,7 +52,6 @@ public class EventManager {
 
     private void scheduleNextEvent() {
         cancelCurrentTask();
-        ConfigManager config = plugin.getConfigManager();
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
@@ -75,7 +77,6 @@ public class EventManager {
         if (state == EventState.ACTIVE) return;
         cancelCurrentTask();
 
-        ConfigManager config = plugin.getConfigManager();
         int minMinutes = config.getMinEventDurationMinutes();
         int maxMinutes = config.getMaxEventDurationMinutes();
 
@@ -83,6 +84,13 @@ public class EventManager {
         totalDurationSeconds = (long) durationMinutes * 60;
         timeLeftSeconds = totalDurationSeconds;
         state = EventState.ACTIVE;
+
+        // Cache particle type once per event start to avoid valueOf lookups
+        try {
+            cachedParticle = Particle.valueOf(config.getParticleType().toUpperCase());
+        } catch (Exception e) {
+            cachedParticle = Particle.HAPPY_VILLAGER;
+        }
 
         applyLocatorVisibility(true);
         plugin.getBossBarManager().show();
@@ -107,7 +115,6 @@ public class EventManager {
                 ticksElapsed = 0;
             }
 
-            ConfigManager config = plugin.getConfigManager();
             if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                 plugin.getBossBarManager().update();
             }
@@ -143,13 +150,16 @@ public class EventManager {
         }
     }
 
+    /**
+     * Controls locator visibility via GameRules.
+     * Map-based visibility is disallowed and has been removed.
+     */
     public void applyLocatorVisibility(boolean visible) {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
-        // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
             boolean inList = worldList.contains(world.getName());
             boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
@@ -157,8 +167,6 @@ public class EventManager {
 
             if (shouldApply) {
                 try {
-                    // Modern Locator Bar HUD control via GameRule
-                    // We use getByName for safety across 1.21.4+ versions.
                     GameRule<?> genericRule = GameRule.getByName("locatorBar");
                     if (genericRule != null && genericRule.getType() == Boolean.class) {
                         @SuppressWarnings("unchecked")
@@ -170,16 +178,15 @@ public class EventManager {
                 }
             }
         }
-
-        // 2. Actualizează hărțile din inventarele jucătorilor
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            updatePlayerInventoryMaps(player, visible);
-        }
     }
 
+    /**
+     * Checks if the event should be active for a specific world.
+     * Performance: O(1) complexity via HashSet.
+     */
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
@@ -188,28 +195,6 @@ public class EventManager {
             return !inList;
         }
         return true;
-    }
-
-    public void updatePlayerInventoryMaps(Player player, boolean visible) {
-        if (!isWorldEnabled(player.getWorld())) return;
-
-        for (ItemStack item : player.getInventory().getContents()) {
-            updateMapItem(item, visible);
-        }
-    }
-
-    public void updateMapItem(ItemStack item, boolean visible) {
-        if (item != null && item.getType() == Material.FILLED_MAP) {
-            if (item.getItemMeta() instanceof MapMeta mapMeta) {
-                if (mapMeta.hasMapView()) {
-                    MapView view = mapMeta.getMapView();
-                    if (view != null) {
-                        view.setTrackingPosition(visible);
-                        item.setItemMeta(mapMeta);
-                    }
-                }
-            }
-        }
     }
 
     private void broadcastAnnouncement(String time) {
@@ -223,13 +208,11 @@ public class EventManager {
     }
 
     private void spawnParticles() {
-        try {
-            Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
-            int amount = config.getParticleAmount();
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
-            }
-        } catch (Exception ignored) {}
+        if (cachedParticle == null) return;
+        int amount = config.getParticleAmount();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.getWorld().spawnParticle(cachedParticle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
+        }
     }
 
     private void broadcastStart() {

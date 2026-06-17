@@ -9,12 +9,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityPickupItemEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
@@ -87,47 +83,13 @@ public class LocatorEvent extends JavaPlugin implements Listener {
     }
 
     @EventHandler
-    public void onWorldChange(PlayerChangedWorldEvent event) {
-        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
-            boolean enabled = eventManager.isWorldEnabled(event.getPlayer().getWorld());
-            eventManager.updatePlayerInventoryMaps(event.getPlayer(), enabled);
-        }
-    }
-
-    @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         bossBarManager.addPlayer(event.getPlayer());
-        if (eventManager.getState() == EventManager.EventState.ACTIVE) {
-            boolean enabled = eventManager.isWorldEnabled(event.getPlayer().getWorld());
-            eventManager.updatePlayerInventoryMaps(event.getPlayer(), enabled);
-        }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         bossBarManager.removePlayer(event.getPlayer());
-    }
-
-    @EventHandler
-    public void onPickup(EntityPickupItemEvent event) {
-        if (eventManager.getState() == EventManager.EventState.ACTIVE && event.getEntity() instanceof org.bukkit.entity.Player player) {
-            if (eventManager.isWorldEnabled(player.getWorld())) {
-                ItemStack item = event.getItem().getItemStack();
-                eventManager.updateMapItem(item, true);
-            }
-        }
-    }
-
-    @EventHandler
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (eventManager.getState() == EventManager.EventState.ACTIVE && event.getWhoClicked() instanceof org.bukkit.entity.Player player) {
-            if (eventManager.isWorldEnabled(player.getWorld())) {
-                ItemStack item = event.getCurrentItem();
-                eventManager.updateMapItem(item, true);
-                ItemStack cursor = event.getCursor();
-                eventManager.updateMapItem(cursor, true);
-            }
-        }
     }
 
     public ConfigManager getConfigManager() { return configManager; }
