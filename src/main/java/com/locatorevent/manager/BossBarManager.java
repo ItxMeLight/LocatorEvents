@@ -70,25 +70,12 @@ public class BossBarManager {
 
         ConfigManager config = plugin.getConfigManager();
 
-        BossBar.Color color;
-        try {
-            color = BossBar.Color.valueOf(config.getBossBarColor().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            color = BossBar.Color.BLUE;
-        }
-
-        BossBar.Overlay style;
-        try {
-            style = BossBar.Overlay.valueOf(config.getBossBarStyle().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            style = BossBar.Overlay.PROGRESS;
-        }
-
+        // Optimized: Uses pre-parsed color and style from ConfigManager
         BossBar bar = BossBar.bossBar(
                 Component.empty(),
                 1.0f,
-                color,
-                style
+                config.getBossBarColor(),
+                config.getBossBarStyle()
         );
 
         playerBossBars.put(player.getUniqueId(), bar);
