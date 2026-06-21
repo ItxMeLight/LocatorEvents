@@ -70,19 +70,8 @@ public class BossBarManager {
 
         ConfigManager config = plugin.getConfigManager();
 
-        BossBar.Color color;
-        try {
-            color = BossBar.Color.valueOf(config.getBossBarColor().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            color = BossBar.Color.BLUE;
-        }
-
-        BossBar.Overlay style;
-        try {
-            style = BossBar.Overlay.valueOf(config.getBossBarStyle().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            style = BossBar.Overlay.PROGRESS;
-        }
+        BossBar.Color color = config.getBossBarColor();
+        BossBar.Overlay style = config.getBossBarStyle();
 
         BossBar bar = BossBar.bossBar(
                 Component.empty(),

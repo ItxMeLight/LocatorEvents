@@ -20,7 +20,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
+import java.util.Set;
 
 public class EventManager {
 
@@ -147,7 +147,7 @@ public class EventManager {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
         // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
@@ -179,7 +179,7 @@ public class EventManager {
 
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
@@ -224,7 +224,7 @@ public class EventManager {
 
     private void spawnParticles() {
         try {
-            Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
+            Particle particle = config.getParticleType();
             int amount = config.getParticleAmount();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
@@ -238,7 +238,7 @@ public class EventManager {
         String startTitle = config.getStartTitle();
         String startSubtitle = config.getStartSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getStartSoundType();
+        Sound sound = config.getStartSoundType();
         float volume = (float) config.getStartSoundVolume();
         float pitch = (float) config.getStartSoundPitch();
 
@@ -251,7 +251,6 @@ public class EventManager {
             }
             if (soundsEnabled) {
                 try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
                 } catch (Exception ignored) {}
             }
@@ -264,7 +263,7 @@ public class EventManager {
         String endTitle = config.getEndTitle();
         String endSubtitle = config.getEndSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getEndSoundType();
+        Sound sound = config.getEndSoundType();
         float volume = (float) config.getEndSoundVolume();
         float pitch = (float) config.getEndSoundPitch();
 
@@ -277,7 +276,6 @@ public class EventManager {
             }
             if (soundsEnabled) {
                 try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
                     player.playSound(player.getLocation(), sound, volume, pitch);
                 } catch (Exception ignored) {}
             }
