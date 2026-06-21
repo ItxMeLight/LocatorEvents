@@ -85,9 +85,9 @@ public class ConfigManager {
         }
 
         try {
-            bossBarStyle = BossBar.Overlay.valueOf(config.getString("bossbar.style", "SOLID").toUpperCase());
+            bossBarStyle = BossBar.Overlay.valueOf(config.getString("bossbar.style", "PROGRESS").toUpperCase());
         } catch (Exception e) {
-            bossBarStyle = BossBar.Overlay.SOLID;
+            bossBarStyle = BossBar.Overlay.PROGRESS;
         }
 
         bossBarUpdateInterval = config.getInt("bossbar.updateIntervalTicks", 20);
