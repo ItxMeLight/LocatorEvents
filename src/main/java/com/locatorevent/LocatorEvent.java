@@ -64,6 +64,8 @@ public class LocatorEvent extends JavaPlugin implements Listener {
             if (args.length > 0) {
                 if (args[0].equalsIgnoreCase("reload")) {
                     configManager.reload();
+                    eventManager.cacheResources();
+                    bossBarManager.cacheResources();
                     sender.sendMessage("§aLocatorEvent configuration reloaded!");
                     return true;
                 } else if (args[0].equalsIgnoreCase("start")) {

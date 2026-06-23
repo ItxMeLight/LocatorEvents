@@ -19,14 +19,19 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
 
 public class EventManager {
 
     private final LocatorEvent plugin;
     private final ConfigManager config;
     private final Random random = new Random();
+
+    // Resource Cache
+    private Particle cachedParticle;
+    private Sound cachedStartSound;
+    private Sound cachedEndSound;
 
     private EventState state = EventState.INACTIVE;
     private long timeLeftSeconds = 0;
@@ -41,6 +46,27 @@ public class EventManager {
     public EventManager(LocatorEvent plugin) {
         this.plugin = plugin;
         this.config = plugin.getConfigManager();
+        this.cacheResources();
+    }
+
+    public void cacheResources() {
+        try {
+            this.cachedParticle = Particle.valueOf(config.getParticleType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedParticle = Particle.HAPPY_VILLAGER;
+        }
+
+        try {
+            this.cachedStartSound = Sound.valueOf(config.getStartSoundType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedStartSound = null;
+        }
+
+        try {
+            this.cachedEndSound = Sound.valueOf(config.getEndSoundType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedEndSound = null;
+        }
     }
 
     public void startScheduler() {
@@ -147,7 +173,7 @@ public class EventManager {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
         // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
@@ -179,7 +205,7 @@ public class EventManager {
 
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
@@ -223,13 +249,11 @@ public class EventManager {
     }
 
     private void spawnParticles() {
-        try {
-            Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
-            int amount = config.getParticleAmount();
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
-            }
-        } catch (Exception ignored) {}
+        if (cachedParticle == null) return;
+        int amount = config.getParticleAmount();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.getWorld().spawnParticle(cachedParticle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
+        }
     }
 
     private void broadcastStart() {
@@ -238,7 +262,6 @@ public class EventManager {
         String startTitle = config.getStartTitle();
         String startSubtitle = config.getStartSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getStartSoundType();
         float volume = (float) config.getStartSoundVolume();
         float pitch = (float) config.getStartSoundPitch();
 
@@ -249,11 +272,8 @@ public class EventManager {
             if (titlesEnabled) {
                 player.showTitle(Title.title(parseText(startTitle, player), parseText(startSubtitle, player)));
             }
-            if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+            if (soundsEnabled && cachedStartSound != null) {
+                player.playSound(player.getLocation(), cachedStartSound, volume, pitch);
             }
         }
     }
@@ -264,7 +284,6 @@ public class EventManager {
         String endTitle = config.getEndTitle();
         String endSubtitle = config.getEndSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getEndSoundType();
         float volume = (float) config.getEndSoundVolume();
         float pitch = (float) config.getEndSoundPitch();
 
@@ -275,11 +294,8 @@ public class EventManager {
             if (titlesEnabled) {
                 player.showTitle(Title.title(parseText(endTitle, player), parseText(endSubtitle, player)));
             }
-            if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+            if (soundsEnabled && cachedEndSound != null) {
+                player.playSound(player.getLocation(), cachedEndSound, volume, pitch);
             }
         }
     }
