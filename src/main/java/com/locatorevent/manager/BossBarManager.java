@@ -65,24 +65,12 @@ public class BossBarManager {
     }
 
     public void addPlayer(Player player) {
-        if (!active || !plugin.getConfigManager().isBossBarEnabled()) return;
+        ConfigManager config = plugin.getConfigManager();
+        if (!active || !config.isBossBarEnabled()) return;
         if (playerBossBars.containsKey(player.getUniqueId())) return;
 
-        ConfigManager config = plugin.getConfigManager();
-
-        BossBar.Color color;
-        try {
-            color = BossBar.Color.valueOf(config.getBossBarColor().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            color = BossBar.Color.BLUE;
-        }
-
-        BossBar.Overlay style;
-        try {
-            style = BossBar.Overlay.valueOf(config.getBossBarStyle().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            style = BossBar.Overlay.PROGRESS;
-        }
+        BossBar.Color color = config.getCachedBossBarColor();
+        BossBar.Overlay style = config.getCachedBossBarStyle();
 
         BossBar bar = BossBar.bossBar(
                 Component.empty(),
