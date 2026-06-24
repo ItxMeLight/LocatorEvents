@@ -7,20 +7,16 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
-import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.MapMeta;
-import org.bukkit.map.MapView;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
 
 public class EventManager {
 
@@ -49,7 +45,6 @@ public class EventManager {
 
     private void scheduleNextEvent() {
         cancelCurrentTask();
-        ConfigManager config = plugin.getConfigManager();
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
@@ -75,7 +70,6 @@ public class EventManager {
         if (state == EventState.ACTIVE) return;
         cancelCurrentTask();
 
-        ConfigManager config = plugin.getConfigManager();
         int minMinutes = config.getMinEventDurationMinutes();
         int maxMinutes = config.getMaxEventDurationMinutes();
 
@@ -107,7 +101,6 @@ public class EventManager {
                 ticksElapsed = 0;
             }
 
-            ConfigManager config = plugin.getConfigManager();
             if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                 plugin.getBossBarManager().update();
             }
@@ -147,9 +140,8 @@ public class EventManager {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
-        // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
             boolean inList = worldList.contains(world.getName());
             boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
@@ -157,8 +149,6 @@ public class EventManager {
 
             if (shouldApply) {
                 try {
-                    // Modern Locator Bar HUD control via GameRule
-                    // We use getByName for safety across 1.21.4+ versions.
                     GameRule<?> genericRule = GameRule.getByName("locatorBar");
                     if (genericRule != null && genericRule.getType() == Boolean.class) {
                         @SuppressWarnings("unchecked")
@@ -170,16 +160,11 @@ public class EventManager {
                 }
             }
         }
-
-        // 2. Actualizează hărțile din inventarele jucătorilor
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            updatePlayerInventoryMaps(player, visible);
-        }
     }
 
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
@@ -188,28 +173,6 @@ public class EventManager {
             return !inList;
         }
         return true;
-    }
-
-    public void updatePlayerInventoryMaps(Player player, boolean visible) {
-        if (!isWorldEnabled(player.getWorld())) return;
-
-        for (ItemStack item : player.getInventory().getContents()) {
-            updateMapItem(item, visible);
-        }
-    }
-
-    public void updateMapItem(ItemStack item, boolean visible) {
-        if (item != null && item.getType() == Material.FILLED_MAP) {
-            if (item.getItemMeta() instanceof MapMeta mapMeta) {
-                if (mapMeta.hasMapView()) {
-                    MapView view = mapMeta.getMapView();
-                    if (view != null) {
-                        view.setTrackingPosition(visible);
-                        item.setItemMeta(mapMeta);
-                    }
-                }
-            }
-        }
     }
 
     private void broadcastAnnouncement(String time) {
@@ -223,13 +186,11 @@ public class EventManager {
     }
 
     private void spawnParticles() {
-        try {
-            Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
-            int amount = config.getParticleAmount();
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
-            }
-        } catch (Exception ignored) {}
+        Particle particle = config.getCachedParticleType();
+        int amount = config.getParticleAmount();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
+        }
     }
 
     private void broadcastStart() {
@@ -238,9 +199,9 @@ public class EventManager {
         String startTitle = config.getStartTitle();
         String startSubtitle = config.getStartSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getStartSoundType();
-        float volume = (float) config.getStartSoundVolume();
-        float pitch = (float) config.getStartSoundPitch();
+        Sound sound = config.getCachedStartSound();
+        float volume = config.getStartSoundVolume();
+        float pitch = config.getStartSoundPitch();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
@@ -250,10 +211,7 @@ public class EventManager {
                 player.showTitle(Title.title(parseText(startTitle, player), parseText(startSubtitle, player)));
             }
             if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+                player.playSound(player.getLocation(), sound, volume, pitch);
             }
         }
     }
@@ -264,9 +222,9 @@ public class EventManager {
         String endTitle = config.getEndTitle();
         String endSubtitle = config.getEndSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getEndSoundType();
-        float volume = (float) config.getEndSoundVolume();
-        float pitch = (float) config.getEndSoundPitch();
+        Sound sound = config.getCachedEndSound();
+        float volume = config.getEndSoundVolume();
+        float pitch = config.getEndSoundPitch();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (msg != null && !msg.isEmpty()) {
@@ -276,10 +234,7 @@ public class EventManager {
                 player.showTitle(Title.title(parseText(endTitle, player), parseText(endSubtitle, player)));
             }
             if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+                player.playSound(player.getLocation(), sound, volume, pitch);
             }
         }
     }
