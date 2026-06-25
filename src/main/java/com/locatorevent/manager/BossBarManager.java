@@ -18,8 +18,34 @@ public class BossBarManager {
     private final Map<UUID, BossBar> playerBossBars = new HashMap<>();
     private boolean active = false;
 
+    // Cached resource objects
+    private BossBar.Color cachedColor;
+    private BossBar.Overlay cachedStyle;
+
     public BossBarManager(LocatorEvent plugin) {
         this.plugin = plugin;
+        cacheResources();
+    }
+
+    public void cacheResources() {
+        ConfigManager config = plugin.getConfigManager();
+        try {
+            this.cachedColor = BossBar.Color.valueOf(config.getBossBarColor().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            this.cachedColor = BossBar.Color.BLUE;
+        }
+
+        try {
+            this.cachedStyle = BossBar.Overlay.valueOf(config.getBossBarStyle().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            this.cachedStyle = BossBar.Overlay.PROGRESS;
+        }
+
+        // Update existing bossbars if they are being displayed
+        playerBossBars.values().forEach(bar -> {
+            bar.color(cachedColor);
+            bar.overlay(cachedStyle);
+        });
     }
 
     public void show() {
@@ -68,27 +94,11 @@ public class BossBarManager {
         if (!active || !plugin.getConfigManager().isBossBarEnabled()) return;
         if (playerBossBars.containsKey(player.getUniqueId())) return;
 
-        ConfigManager config = plugin.getConfigManager();
-
-        BossBar.Color color;
-        try {
-            color = BossBar.Color.valueOf(config.getBossBarColor().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            color = BossBar.Color.BLUE;
-        }
-
-        BossBar.Overlay style;
-        try {
-            style = BossBar.Overlay.valueOf(config.getBossBarStyle().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            style = BossBar.Overlay.PROGRESS;
-        }
-
         BossBar bar = BossBar.bossBar(
                 Component.empty(),
                 1.0f,
-                color,
-                style
+                cachedColor,
+                cachedStyle
         );
 
         playerBossBars.put(player.getUniqueId(), bar);
