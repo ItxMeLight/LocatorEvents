@@ -3,12 +3,18 @@ package com.locatorevent.manager;
 import com.locatorevent.LocatorEvent;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ConfigManager {
 
     private final LocatorEvent plugin;
     private FileConfiguration config;
+    // Optimized: Using HashSet for O(1) lookups during frequent event processing
+    private Set<String> worldList = new HashSet<>();
+    private Set<String> unmodifiableWorldList = Collections.emptySet();
 
     public ConfigManager(LocatorEvent plugin) {
         this.plugin = plugin;
@@ -19,6 +25,9 @@ public class ConfigManager {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         this.config = plugin.getConfig();
+        // Caching the world list into a HashSet to improve lookup performance (O(1) vs O(N))
+        this.worldList = new HashSet<>(config.getStringList("event.worlds.list"));
+        this.unmodifiableWorldList = Collections.unmodifiableSet(this.worldList);
     }
 
     // Event Timing
@@ -29,7 +38,7 @@ public class ConfigManager {
 
     // World settings
     public String getWorldMode() { return config.getString("event.worlds.mode", "WHITELIST"); }
-    public List<String> getWorldList() { return config.getStringList("event.worlds.list"); }
+    public Set<String> getWorldList() { return unmodifiableWorldList; }
     public boolean isLocatorEnabled() { return config.getBoolean("event.enableLocator", true); }
 
     // BossBar settings
