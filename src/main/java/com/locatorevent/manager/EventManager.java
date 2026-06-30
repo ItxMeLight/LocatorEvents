@@ -20,7 +20,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
+import java.util.Set;
 
 public class EventManager {
 
@@ -147,7 +147,7 @@ public class EventManager {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
         // 1. Aplică regula GameRule pe lumi
         for (World world : Bukkit.getWorlds()) {
@@ -179,7 +179,7 @@ public class EventManager {
 
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
