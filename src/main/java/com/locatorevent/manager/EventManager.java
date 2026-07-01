@@ -20,7 +20,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.List;
+import java.util.Set;
 
 public class EventManager {
 
@@ -34,6 +34,12 @@ public class EventManager {
 
     private BukkitTask currentTask;
 
+    // Cached resources
+    private Particle cachedParticle;
+    private Sound cachedStartSound;
+    private Sound cachedEndSound;
+    private GameRule<Boolean> locatorBarRule;
+
     public enum EventState {
         ACTIVE, INACTIVE
     }
@@ -41,6 +47,35 @@ public class EventManager {
     public EventManager(LocatorEvent plugin) {
         this.plugin = plugin;
         this.config = plugin.getConfigManager();
+        this.cacheResources();
+    }
+
+    @SuppressWarnings("unchecked")
+    public void cacheResources() {
+        try {
+            this.cachedParticle = Particle.valueOf(config.getParticleType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedParticle = Particle.HAPPY_VILLAGER;
+        }
+
+        try {
+            this.cachedStartSound = Sound.valueOf(config.getStartSoundType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedStartSound = null;
+        }
+
+        try {
+            this.cachedEndSound = Sound.valueOf(config.getEndSoundType().toUpperCase());
+        } catch (Exception e) {
+            this.cachedEndSound = null;
+        }
+
+        try {
+            GameRule<?> genericRule = GameRule.getByName("locatorBar");
+            if (genericRule != null && genericRule.getType() == Boolean.class) {
+                this.locatorBarRule = (GameRule<Boolean>) genericRule;
+            }
+        } catch (Exception ignored) {}
     }
 
     public void startScheduler() {
@@ -49,7 +84,6 @@ public class EventManager {
 
     private void scheduleNextEvent() {
         cancelCurrentTask();
-        ConfigManager config = plugin.getConfigManager();
         int minHours = config.getMinCooldownHours();
         int maxHours = config.getMaxCooldownHours();
 
@@ -75,7 +109,6 @@ public class EventManager {
         if (state == EventState.ACTIVE) return;
         cancelCurrentTask();
 
-        ConfigManager config = plugin.getConfigManager();
         int minMinutes = config.getMinEventDurationMinutes();
         int maxMinutes = config.getMaxEventDurationMinutes();
 
@@ -107,7 +140,6 @@ public class EventManager {
                 ticksElapsed = 0;
             }
 
-            ConfigManager config = plugin.getConfigManager();
             if ((timeLeftSeconds * 20 + (20 - ticksElapsed)) % config.getBossBarUpdateInterval() == 0) {
                 plugin.getBossBarManager().update();
             }
@@ -147,26 +179,21 @@ public class EventManager {
         if (!config.isLocatorEnabled()) return;
 
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
 
         // 1. Aplică regula GameRule pe lumi
-        for (World world : Bukkit.getWorlds()) {
-            boolean inList = worldList.contains(world.getName());
-            boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
-                                  (mode.equalsIgnoreCase("BLACKLIST") && !inList);
+        if (locatorBarRule != null) {
+            for (World world : Bukkit.getWorlds()) {
+                boolean inList = worldList.contains(world.getName());
+                boolean shouldApply = (mode.equalsIgnoreCase("WHITELIST") && inList) ||
+                                      (mode.equalsIgnoreCase("BLACKLIST") && !inList);
 
-            if (shouldApply) {
-                try {
-                    // Modern Locator Bar HUD control via GameRule
-                    // We use getByName for safety across 1.21.4+ versions.
-                    GameRule<?> genericRule = GameRule.getByName("locatorBar");
-                    if (genericRule != null && genericRule.getType() == Boolean.class) {
-                        @SuppressWarnings("unchecked")
-                        GameRule<Boolean> locatorBarRule = (GameRule<Boolean>) genericRule;
+                if (shouldApply) {
+                    try {
                         world.setGameRule(locatorBarRule, visible);
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Failed to set locatorBar game rule in world " + world.getName() + ": " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Failed to set locatorBar game rule in world " + world.getName() + ": " + e.getMessage());
                 }
             }
         }
@@ -179,7 +206,7 @@ public class EventManager {
 
     public boolean isWorldEnabled(World world) {
         String mode = config.getWorldMode();
-        List<String> worldList = config.getWorldList();
+        Set<String> worldList = config.getWorldList();
         boolean inList = worldList.contains(world.getName());
 
         if (mode.equalsIgnoreCase("WHITELIST")) {
@@ -203,9 +230,9 @@ public class EventManager {
             if (item.getItemMeta() instanceof MapMeta mapMeta) {
                 if (mapMeta.hasMapView()) {
                     MapView view = mapMeta.getMapView();
-                    if (view != null) {
+                    if (view != null && view.isTrackingPosition() != visible) {
                         view.setTrackingPosition(visible);
-                        item.setItemMeta(mapMeta);
+                        // item.setItemMeta(mapMeta) is redundant for MapView changes
                     }
                 }
             }
@@ -223,13 +250,11 @@ public class EventManager {
     }
 
     private void spawnParticles() {
-        try {
-            Particle particle = Particle.valueOf(config.getParticleType().toUpperCase());
-            int amount = config.getParticleAmount();
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.getWorld().spawnParticle(particle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
-            }
-        } catch (Exception ignored) {}
+        if (cachedParticle == null) return;
+        int amount = config.getParticleAmount();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.getWorld().spawnParticle(cachedParticle, player.getLocation().add(0, 2, 0), amount, 0.5, 0.5, 0.5, 0.05);
+        }
     }
 
     private void broadcastStart() {
@@ -238,7 +263,6 @@ public class EventManager {
         String startTitle = config.getStartTitle();
         String startSubtitle = config.getStartSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getStartSoundType();
         float volume = (float) config.getStartSoundVolume();
         float pitch = (float) config.getStartSoundPitch();
 
@@ -249,11 +273,8 @@ public class EventManager {
             if (titlesEnabled) {
                 player.showTitle(Title.title(parseText(startTitle, player), parseText(startSubtitle, player)));
             }
-            if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+            if (soundsEnabled && cachedStartSound != null) {
+                player.playSound(player.getLocation(), cachedStartSound, volume, pitch);
             }
         }
     }
@@ -264,7 +285,6 @@ public class EventManager {
         String endTitle = config.getEndTitle();
         String endSubtitle = config.getEndSubtitle();
         boolean soundsEnabled = config.isSoundsEnabled();
-        String soundType = config.getEndSoundType();
         float volume = (float) config.getEndSoundVolume();
         float pitch = (float) config.getEndSoundPitch();
 
@@ -275,11 +295,8 @@ public class EventManager {
             if (titlesEnabled) {
                 player.showTitle(Title.title(parseText(endTitle, player), parseText(endSubtitle, player)));
             }
-            if (soundsEnabled) {
-                try {
-                    Sound sound = Sound.valueOf(soundType.toUpperCase());
-                    player.playSound(player.getLocation(), sound, volume, pitch);
-                } catch (Exception ignored) {}
+            if (soundsEnabled && cachedEndSound != null) {
+                player.playSound(player.getLocation(), cachedEndSound, volume, pitch);
             }
         }
     }
